@@ -638,6 +638,142 @@
       display: none;
     }
 
+    .journal-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .journal-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .schedule-journal {
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .journal-day {
+      border-bottom: 1px solid var(--line);
+    }
+
+    .journal-day.open {
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+    }
+
+    .journal-day-toggle {
+      display: grid;
+      grid-template-columns: 76px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      padding: 16px 4px;
+      text-align: left;
+      font: inherit;
+    }
+
+    .journal-date {
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 950;
+    }
+
+    .journal-weekday {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .journal-preview {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 700;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .journal-chevron {
+      color: var(--muted);
+      font-size: 20px;
+      font-weight: 900;
+      transition: transform .18s ease;
+    }
+
+    .journal-day.open .journal-chevron {
+      transform: rotate(90deg);
+    }
+
+    .journal-body {
+      display: none;
+      padding: 0 4px 18px 90px;
+    }
+
+    .journal-day.open .journal-body {
+      display: grid;
+      gap: 10px;
+    }
+
+    .journal-note {
+      width: 100%;
+      min-height: 46px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      resize: vertical;
+      font: 700 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", Arial, sans-serif;
+      padding: 8px 0;
+    }
+
+    .journal-task-row {
+      display: grid;
+      grid-template-columns: 28px 1fr;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .journal-task-num {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 950;
+    }
+
+    .journal-task {
+      width: 100%;
+      min-height: 40px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      resize: vertical;
+      font: 700 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", Arial, sans-serif;
+      padding: 4px 0 8px;
+    }
+
+    .journal-note:focus,
+    .journal-task:focus {
+      outline: 0;
+      border-bottom-color: var(--blue);
+      background: #fbfdff;
+    }
+
     .people-toolbar {
       display: flex;
       align-items: center;
@@ -1146,6 +1282,7 @@
 
     <nav class="tabs" aria-label="Dashboard tabs">
       <button class="tab active" type="button" data-page="performance">業績總覽</button>
+      <button class="tab" type="button" data-page="schedule">工作排程</button>
       <button class="tab" type="button" data-page="people">人員</button>
     </nav>
 
@@ -1327,6 +1464,23 @@
       </div>
       <div class="trend-grid" id="overviewGrid"></div>
     </section>
+    </section>
+
+    <section class="page" id="schedulePage" hidden>
+      <div class="panel panel-pad">
+        <div class="journal-head">
+          <div>
+            <p class="eyebrow">Monthly Journal</p>
+            <h2>工作排程</h2>
+          </div>
+          <div class="journal-controls">
+            <button class="month-nav" type="button" id="prevScheduleMonth" aria-label="上一個月">‹</button>
+            <button class="current-month" type="button" id="currentScheduleMonth">2026 / 06</button>
+            <button class="month-nav" type="button" id="nextScheduleMonth" aria-label="下一個月">›</button>
+          </div>
+        </div>
+        <div class="schedule-journal" id="scheduleJournal"></div>
+      </div>
     </section>
 
     <section class="page" id="peoplePage" hidden>
@@ -1536,6 +1690,10 @@
     const storeJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1eXOOu23DjcDs7ux9okKxuYyMGclYljcbfSttwMXxugQ/gviz/tq?gid=1982357511";
     const ownJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1Bn0Y71fYghy3-xmw8Zp84S6uF8JKFIH-FDhguUcaAbY/gviz/tq?gid=1917109526";
     const peopleGvizUrl = "https://docs.google.com/spreadsheets/d/1k79vEPkX1glnz5AQAROdLu_3e-FodeGRpSFMqw9JS_E/gviz/tq?gid=1321198903";
+    const todayForSchedule = new Date();
+    let scheduleYear = todayForSchedule.getFullYear();
+    let scheduleMonth = todayForSchedule.getMonth() + 1;
+    let openScheduleDay = todayForSchedule.getDate();
     let peopleCategory = "new";
     let editingPersonId = null;
     const peopleStorageKey = "max-work-journal-people";
@@ -1704,11 +1862,90 @@
 
     function switchPage(page) {
       document.getElementById("performancePage").hidden = page !== "performance";
+      document.getElementById("schedulePage").hidden = page !== "schedule";
       document.getElementById("peoplePage").hidden = page !== "people";
       document.querySelectorAll(".tab").forEach(tab => {
         tab.classList.toggle("active", tab.dataset.page === page);
       });
       document.querySelector(".date-chip").style.display = page === "performance" ? "" : "none";
+    }
+
+    function getScheduleKey(day) {
+      return `${scheduleYear}-${String(scheduleMonth).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    }
+
+    function getScheduleRecord(day) {
+      const local = localStorage.getItem(`max-journal-schedule-${getScheduleKey(day)}`);
+      if (!local) return {};
+      try {
+        return JSON.parse(local);
+      } catch (error) {
+        return {};
+      }
+    }
+
+    function saveScheduleRecord(day, field, value) {
+      const record = getScheduleRecord(day);
+      record[field] = value;
+      localStorage.setItem(`max-journal-schedule-${getScheduleKey(day)}`, JSON.stringify(record));
+    }
+
+    function getSchedulePreview(record) {
+      const values = [record.note, record.task1, record.task2, record.task3, record.task4].filter(Boolean);
+      return values.length ? values.join(" / ") : "點開寫今天的安排";
+    }
+
+    function renderScheduleJournal() {
+      const journal = document.getElementById("scheduleJournal");
+      const monthButton = document.getElementById("currentScheduleMonth");
+      if (!journal || !monthButton) return;
+      monthButton.textContent = `${scheduleYear} / ${String(scheduleMonth).padStart(2, "0")}`;
+      const days = new Date(scheduleYear, scheduleMonth, 0).getDate();
+      if (openScheduleDay > days) openScheduleDay = days;
+      const weekNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+      journal.innerHTML = Array.from({ length: days }, (_, index) => {
+        const day = index + 1;
+        const date = new Date(scheduleYear, scheduleMonth - 1, day);
+        const record = getScheduleRecord(day);
+        const isOpen = day === openScheduleDay;
+        const tasks = [1, 2, 3, 4].map(num => `
+          <label class="journal-task-row">
+            <span class="journal-task-num">${num}</span>
+            <textarea class="journal-task" data-day="${day}" data-field="task${num}" placeholder="寫下第 ${num} 件事">${escapeHtml(record[`task${num}`] || "")}</textarea>
+          </label>
+        `).join("");
+        return `
+          <section class="journal-day ${isOpen ? "open" : ""}">
+            <button class="journal-day-toggle" type="button" data-open-day="${day}">
+              <span>
+                <span class="journal-date">${day}</span>
+                <span class="journal-weekday">${weekNames[date.getDay()]}</span>
+              </span>
+              <span class="journal-preview">${escapeHtml(getSchedulePreview(record))}</span>
+              <span class="journal-chevron">›</span>
+            </button>
+            <div class="journal-body">
+              <textarea class="journal-note" data-day="${day}" data-field="note" placeholder="假 / 備註">${escapeHtml(record.note || "")}</textarea>
+              ${tasks}
+            </div>
+          </section>
+        `;
+      }).join("");
+
+      journal.querySelectorAll("[data-open-day]").forEach(button => {
+        button.addEventListener("click", () => {
+          openScheduleDay = Number(button.dataset.openDay);
+          renderScheduleJournal();
+        });
+      });
+      journal.querySelectorAll("[data-field]").forEach(input => {
+        input.addEventListener("input", () => {
+          saveScheduleRecord(Number(input.dataset.day), input.dataset.field, input.value);
+          const row = input.closest(".journal-day");
+          const preview = row.querySelector(".journal-preview");
+          preview.textContent = getSchedulePreview(getScheduleRecord(Number(input.dataset.day)));
+        });
+      });
     }
 
     function loadPeople() {
@@ -2302,6 +2539,24 @@
     document.getElementById("nextMonth").addEventListener("click", () => moveMonth(1));
     document.getElementById("currentMonth").addEventListener("click", toggleMonthMenu);
     document.getElementById("syncButton").addEventListener("click", syncJuneData);
+    document.getElementById("prevScheduleMonth").addEventListener("click", () => {
+      scheduleMonth -= 1;
+      if (scheduleMonth < 1) {
+        scheduleMonth = 12;
+        scheduleYear -= 1;
+      }
+      openScheduleDay = 1;
+      renderScheduleJournal();
+    });
+    document.getElementById("nextScheduleMonth").addEventListener("click", () => {
+      scheduleMonth += 1;
+      if (scheduleMonth > 12) {
+        scheduleMonth = 1;
+        scheduleYear += 1;
+      }
+      openScheduleDay = 1;
+      renderScheduleJournal();
+    });
     document.getElementById("addPersonButton").addEventListener("click", () => openPersonModal());
     document.getElementById("syncPeopleButton").addEventListener("click", syncPeopleData);
     document.getElementById("closePersonModal").addEventListener("click", closePersonModal);
@@ -2328,6 +2583,7 @@
     });
 
     renderPeopleList();
+    renderScheduleJournal();
     renderMonth(activeMonth);
     if (activeMonth === "2026-06") syncJuneData();
   </script>
