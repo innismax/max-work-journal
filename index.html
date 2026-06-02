@@ -1690,12 +1690,14 @@
     const storeJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1eXOOu23DjcDs7ux9okKxuYyMGclYljcbfSttwMXxugQ/gviz/tq?gid=1982357511";
     const ownJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1Bn0Y71fYghy3-xmw8Zp84S6uF8JKFIH-FDhguUcaAbY/gviz/tq?gid=1917109526";
     const peopleGvizUrl = "https://docs.google.com/spreadsheets/d/1k79vEPkX1glnz5AQAROdLu_3e-FodeGRpSFMqw9JS_E/gviz/tq?gid=1321198903";
+    const peopleBackendUrl = "";
     const todayForSchedule = new Date();
     let scheduleYear = todayForSchedule.getFullYear();
     let scheduleMonth = todayForSchedule.getMonth() + 1;
     let openScheduleDay = todayForSchedule.getDate();
     let peopleCategory = "new";
     let editingPersonId = null;
+    let peopleCache = [];
     const peopleStorageKey = "max-work-journal-people";
     const archivedPeopleStorageKey = "max-work-journal-archived-people";
     const peopleCategoryLabels = {
@@ -1825,6 +1827,41 @@
       });
     }
 
+    function isPeopleBackendReady() {
+      return Boolean(peopleBackendUrl && peopleBackendUrl.startsWith("https://script.google.com/"));
+    }
+
+    function callPeopleBackend(params) {
+      if (!isPeopleBackendReady()) return Promise.reject(new Error("人員後端尚未設定"));
+      return new Promise((resolve, reject) => {
+        const callbackName = `peopleBackendCallback${Date.now()}${Math.round(Math.random() * 1000)}`;
+        const script = document.createElement("script");
+        const query = new URLSearchParams({
+          ...params,
+          callback: callbackName,
+          t: Date.now(),
+        });
+        const cleanup = () => {
+          delete window[callbackName];
+          script.remove();
+        };
+        window[callbackName] = payload => {
+          cleanup();
+          if (!payload || payload.ok === false) {
+            reject(new Error(payload?.message || "人員後端失敗"));
+            return;
+          }
+          resolve(payload);
+        };
+        script.onerror = () => {
+          cleanup();
+          reject(new Error("人員後端讀取失敗"));
+        };
+        script.src = `${peopleBackendUrl}?${query.toString()}`;
+        document.body.appendChild(script);
+      });
+    }
+
     function parseCsv(text) {
       const rows = [];
       let row = [];
@@ -1950,15 +1987,11 @@
     }
 
     function loadPeople() {
-      try {
-        return JSON.parse(localStorage.getItem(peopleStorageKey)) || [];
-      } catch (error) {
-        return [];
-      }
+      return peopleCache;
     }
 
     function savePeople(people) {
-      localStorage.setItem(peopleStorageKey, JSON.stringify(people));
+      peopleCache = people;
     }
 
     function loadArchivedPeopleIds() {
@@ -2139,11 +2172,20 @@
         button.addEventListener("click", () => handlePersonAction(button.dataset.action, button.dataset.id));
       });
       list.querySelectorAll("[data-return-date]").forEach(input => {
-        input.addEventListener("change", () => {
+        input.addEventListener("change", async () => {
           const people = loadPeople();
           const person = people.find(item => item.id === input.dataset.returnDate);
           if (!person) return;
           person.expectedReturnDate = input.value;
+          if (isPeopleBackendReady()) {
+            await callPeopleBackend({
+              action: "update",
+              id: person.id,
+              patch: JSON.stringify({ expectedReturnDate: input.value }),
+            });
+            await syncPeopleData();
+            return;
+          }
           savePeople(people);
           renderPeopleList();
         });
@@ -2201,7 +2243,7 @@
       document.getElementById("personForm").reset();
     }
 
-    function savePersonFromForm(event) {
+    async function savePersonFromForm(event) {
       event.preventDefault();
       const people = loadPeople();
       const promotedPassed = getFormValue("personPromotedPassed");
@@ -2226,6 +2268,16 @@
       };
       if (person.category === "promoted" && !person.promotionMonth) person.promotionMonth = getCurrentMonthValue();
       if (person.category === "left" && !person.leaveMonth) person.leaveMonth = getCurrentMonthValue();
+      if (isPeopleBackendReady()) {
+        await callPeopleBackend({
+          action: "upsert",
+          person: JSON.stringify(person),
+        });
+        peopleCategory = person.category;
+        closePersonModal();
+        await syncPeopleData();
+        return;
+      }
       if (existingIndex >= 0) {
         people[existingIndex] = person;
       } else {
@@ -2237,7 +2289,7 @@
       renderPeopleList();
     }
 
-    function handlePersonAction(action, id) {
+    async function handlePersonAction(action, id) {
       if (action === "edit") {
         openPersonModal(id);
         return;
@@ -2247,6 +2299,11 @@
       if (!person) return;
       if (action === "delete") {
         if (!confirm(`確定要刪除「${person.name || "這位人員"}」嗎？`)) return;
+        if (isPeopleBackendReady()) {
+          await callPeopleBackend({ action: "archive", id });
+          await syncPeopleData();
+          return;
+        }
         archivePersonId(id);
         savePeople(people.filter(item => item.id !== id));
         renderPeopleList();
@@ -2268,6 +2325,15 @@
       }
       if (action === "uniformReturned") {
         person.uniformReturned = !person.uniformReturned;
+      }
+      if (isPeopleBackendReady()) {
+        await callPeopleBackend({
+          action: "update",
+          id,
+          patch: JSON.stringify(person),
+        });
+        await syncPeopleData();
+        return;
       }
       savePeople(people);
       renderPeopleList();
@@ -2334,6 +2400,13 @@
       button.disabled = true;
       status.textContent = "同步人員表中...";
       try {
+        if (isPeopleBackendReady()) {
+          const payload = await callPeopleBackend({ action: "list" });
+          savePeople(payload.people || []);
+          renderPeopleList();
+          status.textContent = `已同步 ${loadPeople().length} 筆人員資料`;
+          return;
+        }
         const rows = await loadGvizRows(peopleGvizUrl);
         const archived = new Set(loadArchivedPeopleIds());
         const imported = rows.slice(1)
