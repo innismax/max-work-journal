@@ -2373,6 +2373,10 @@
       return rows.find(row => normalizeDateText(row[1]) === dateKey) || rows.find(row => parseNumber(String(row[1]).split("/").pop()) === currentDay);
     }
 
+    function getOwnStaffCount(row) {
+      return parseNumber(row?.[20]) + parseNumber(row?.[21]);
+    }
+
     async function syncJuneData() {
       const button = document.getElementById("syncButton");
       const status = document.getElementById("syncStatus");
@@ -2395,7 +2399,7 @@
         const salesActual = dateRows.reduce((sum, row) => sum + getStoreDailySales(row), 0);
         const currentDay = parseNumber(dataRow?.[2]) || 1;
         const ownRow = getOwnDateRow(ownRows, currentDay);
-        const staffCount = parseNumber(ownRow?.[14]) + parseNumber(ownRow?.[15]);
+        const staffCount = getOwnStaffCount(ownRow);
         const targetFirst7 = currentDay <= 7 ? parseNumber(ownRow?.[9]) : 0;
         const target100 = currentDay >= 8 ? parseNumber(ownRow?.[6]) : 0;
         const target90 = currentDay >= 8 ? parseNumber(ownRow?.[7]) : 0;
