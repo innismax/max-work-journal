@@ -1697,6 +1697,7 @@
     let peopleCategory = "new";
     let editingPersonId = null;
     const peopleStorageKey = "max-work-journal-people";
+    const archivedPeopleStorageKey = "max-work-journal-archived-people";
     const peopleCategoryLabels = {
       new: "新人",
       promoted: "已轉正",
@@ -1958,6 +1959,20 @@
 
     function savePeople(people) {
       localStorage.setItem(peopleStorageKey, JSON.stringify(people));
+    }
+
+    function loadArchivedPeopleIds() {
+      try {
+        return JSON.parse(localStorage.getItem(archivedPeopleStorageKey)) || [];
+      } catch (error) {
+        return [];
+      }
+    }
+
+    function archivePersonId(id) {
+      const archived = new Set(loadArchivedPeopleIds());
+      archived.add(id);
+      localStorage.setItem(archivedPeopleStorageKey, JSON.stringify([...archived]));
     }
 
     function getCurrentMonthValue() {
@@ -2232,6 +2247,7 @@
       if (!person) return;
       if (action === "delete") {
         if (!confirm(`確定要刪除「${person.name || "這位人員"}」嗎？`)) return;
+        archivePersonId(id);
         savePeople(people.filter(item => item.id !== id));
         renderPeopleList();
         return;
@@ -2319,9 +2335,11 @@
       status.textContent = "同步人員表中...";
       try {
         const rows = await loadGvizRows(peopleGvizUrl);
+        const archived = new Set(loadArchivedPeopleIds());
         const imported = rows.slice(1)
           .map((row, index) => mapPeopleRow(row, index + 2))
-          .filter(person => person.store || person.name !== "未填姓名" || person.reportDate);
+          .filter(person => person.store || person.name !== "未填姓名" || person.reportDate)
+          .filter(person => !archived.has(person.id));
         const manualPeople = loadPeople().filter(person => person.source !== "peopleSheet");
         savePeople([...manualPeople, ...imported]);
         renderPeopleList();
@@ -2589,6 +2607,7 @@
     renderPeopleList();
     renderScheduleJournal();
     renderMonth(activeMonth);
+    syncPeopleData();
     if (activeMonth === "2026-06") syncJuneData();
   </script>
 </body>
