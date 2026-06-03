@@ -2394,6 +2394,19 @@
       };
     }
 
+    function isValidPerson(person) {
+      return Boolean(person && person.category && (person.store || person.reportDate || (person.name && person.name !== "未填姓名")));
+    }
+
+    async function loadPeopleFromSourceSheet() {
+      const rows = await loadGvizRows(peopleGvizUrl);
+      const archived = new Set(loadArchivedPeopleIds());
+      return rows.slice(1)
+        .map((row, index) => mapPeopleRow(row, index + 2))
+        .filter(isValidPerson)
+        .filter(person => !archived.has(person.id));
+    }
+
     async function syncPeopleData() {
       const button = document.getElementById("syncPeopleButton");
       const status = document.getElementById("peopleSyncStatus");
@@ -2402,17 +2415,20 @@
       try {
         if (isPeopleBackendReady()) {
           const payload = await callPeopleBackend({ action: "list" });
-          savePeople(payload.people || []);
+          const backendPeople = (payload.people || []).filter(isValidPerson);
+          if (!backendPeople.length) {
+            const fallbackPeople = await loadPeopleFromSourceSheet();
+            savePeople(fallbackPeople);
+            renderPeopleList();
+            status.textContent = `後端資料空白，暫讀原始人員表 ${fallbackPeople.length} 筆`;
+            return;
+          }
+          savePeople(backendPeople);
           renderPeopleList();
           status.textContent = `已同步 ${loadPeople().length} 筆人員資料`;
           return;
         }
-        const rows = await loadGvizRows(peopleGvizUrl);
-        const archived = new Set(loadArchivedPeopleIds());
-        const imported = rows.slice(1)
-          .map((row, index) => mapPeopleRow(row, index + 2))
-          .filter(person => person.store || person.reportDate || (person.name && person.name !== "未填姓名"))
-          .filter(person => !archived.has(person.id));
+        const imported = await loadPeopleFromSourceSheet();
         const manualPeople = loadPeople().filter(person => person.source !== "peopleSheet");
         savePeople([...manualPeople, ...imported]);
         renderPeopleList();
