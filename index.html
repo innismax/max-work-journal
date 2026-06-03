@@ -2362,6 +2362,15 @@
       return `${match[1]}-${String(Number(match[2])).padStart(2, "0")}-${String(Number(match[3])).padStart(2, "0")}`;
     }
 
+    function getSourcePeopleCategory(rawCategory, promotedPassed, row) {
+      const categoryText = String(rawCategory || "").trim().toLowerCase();
+      const notesText = [row[8], row[10], row[12]].map(value => String(value || "")).join(" ");
+      if (categoryText.includes("離職") || notesText.includes("離職") || notesText.includes("不報到")) return "left";
+      if (categoryText.includes("pt") || categoryText.includes("工讀")) return "parttime";
+      if (promotedPassed) return "promoted";
+      return "new";
+    }
+
     function mapPeopleRow(row, index) {
       const rawCategory = String(row[0] || "").trim();
       const store = String(row[1] || "").trim();
@@ -2369,9 +2378,7 @@
       const chineseName = String(row[3] || "").trim();
       const englishName = String(row[4] || "").trim();
       const promotedPassed = parseSheetBoolean(row[7]) || Boolean(String(row[6] || "").trim());
-      let category = "new";
-      if (rawCategory.includes("工讀")) category = "parttime";
-      if (promotedPassed && category !== "parttime") category = "promoted";
+      const category = getSourcePeopleCategory(rawCategory, promotedPassed, row);
       const noteParts = [
         rawCategory ? `原類別：${rawCategory}` : "",
         row[8] ? `新生課：${row[8]}` : "",
@@ -2404,8 +2411,8 @@
     async function loadPeopleFromSourceSheet() {
       const rows = await loadGvizRows(peopleGvizUrl);
       const archived = new Set(loadArchivedPeopleIds());
-      return rows.slice(1)
-        .map((row, index) => mapPeopleRow(row, index + 2))
+      return rows
+        .map((row, index) => mapPeopleRow(row, index + 1))
         .filter(isValidPerson)
         .filter(person => !archived.has(person.id));
     }
@@ -2416,26 +2423,27 @@
       button.disabled = true;
       status.textContent = "同步人員表中...";
       try {
+        const sourcePeople = await loadPeopleFromSourceSheet();
         if (isPeopleBackendReady()) {
           const payload = await callPeopleBackend({ action: "list" });
           const backendPeople = (payload.people || []).filter(isValidPerson);
           if (!backendPeople.length) {
-            const fallbackPeople = await loadPeopleFromSourceSheet();
-            savePeople(fallbackPeople);
+            savePeople(sourcePeople);
             renderPeopleList();
-            status.textContent = `後端資料空白，暫讀原始人員表 ${fallbackPeople.length} 筆`;
+            status.textContent = `已同步原始人員表 ${sourcePeople.length} 筆`;
             return;
           }
-          savePeople(backendPeople);
+          const merged = new Map(sourcePeople.map(person => [person.id, person]));
+          backendPeople.forEach(person => merged.set(person.id, person));
+          savePeople([...merged.values()]);
           renderPeopleList();
           status.textContent = `已同步 ${loadPeople().length} 筆人員資料`;
           return;
         }
-        const imported = await loadPeopleFromSourceSheet();
         const manualPeople = loadPeople().filter(person => person.source !== "peopleSheet");
-        savePeople([...manualPeople, ...imported]);
+        savePeople([...manualPeople, ...sourcePeople]);
         renderPeopleList();
-        status.textContent = `已同步 ${imported.length} 筆人員資料`;
+        status.textContent = `已同步原始人員表 ${sourcePeople.length} 筆`;
       } catch (error) {
         status.textContent = "同步失敗，請確認人員表權限";
       } finally {
