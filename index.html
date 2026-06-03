@@ -1546,8 +1546,8 @@
             <input id="personUniformSize" type="text" placeholder="例如 S / M / L">
           </div>
           <div class="form-field" data-person-scope="left">
-            <label for="personLeaveMonth">離職月份</label>
-            <input id="personLeaveMonth" type="month">
+            <label for="personLeaveDate">離職日期</label>
+            <input id="personLeaveDate" type="date">
           </div>
           <div class="form-field" data-person-scope="left">
             <label for="personReturnDate">預計制服交還日期</label>
@@ -2013,6 +2013,11 @@
       return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
     }
 
+    function getCurrentDateValue() {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    }
+
     function formatDate(value) {
       if (!value) return "未填";
       return value.replace(/-/g, "/");
@@ -2039,7 +2044,7 @@
       }
       if (person.uniformSize) chips.push({ text: `制服 ${person.uniformSize}` });
       if (person.category === "left") {
-        chips.push({ text: `離職 ${formatMonth(person.leaveMonth)}`, tone: "bad" });
+        chips.push({ text: `離職 ${formatDate(person.leaveDate || person.leaveMonth)}`, tone: "bad" });
         chips.push({
           text: person.uniformReturned ? "制服已還" : `預計還 ${formatDate(person.expectedReturnDate)}`,
           tone: person.uniformReturned ? "good" : "warn",
@@ -2074,7 +2079,7 @@
       if (person.category !== "parttime") meta.push(`升正職月：${formatMonth(person.promotionMonth)}`);
       if (person.uniformSize) meta.push(`制服：${person.uniformSize}`);
       if (person.category === "left") {
-        meta.push(`離職月：${formatMonth(person.leaveMonth)}`);
+        meta.push(`離職日期：${formatDate(person.leaveDate || person.leaveMonth)}`);
         meta.push(`預計交還：${formatDate(person.expectedReturnDate)}`);
       }
       if (person.note) meta.push(`備註：${person.note}`);
@@ -2226,7 +2231,7 @@
       setFormValue("personReportDate", person.reportDate);
       setFormValue("personPromotionMonth", person.promotionMonth);
       setFormValue("personUniformSize", person.uniformSize);
-      setFormValue("personLeaveMonth", person.leaveMonth);
+      setFormValue("personLeaveDate", person.leaveDate || person.leaveMonth);
       setFormValue("personReturnDate", person.expectedReturnDate);
       setFormValue("personPromotedPassed", person.promotedPassed);
       setFormValue("personInnischool", person.innischool);
@@ -2259,7 +2264,8 @@
         reportDate: getFormValue("personReportDate"),
         promotionMonth: getFormValue("personPromotionMonth"),
         uniformSize: getFormValue("personUniformSize"),
-        leaveMonth: getFormValue("personLeaveMonth"),
+        leaveDate: getFormValue("personLeaveDate"),
+        leaveMonth: getFormValue("personLeaveDate"),
         expectedReturnDate: getFormValue("personReturnDate"),
         promotedPassed,
         innischool: getFormValue("personInnischool"),
@@ -2267,7 +2273,10 @@
         note: getFormValue("personNote"),
       };
       if (person.category === "promoted" && !person.promotionMonth) person.promotionMonth = getCurrentMonthValue();
-      if (person.category === "left" && !person.leaveMonth) person.leaveMonth = getCurrentMonthValue();
+      if (person.category === "left" && !person.leaveDate) {
+        person.leaveDate = getCurrentDateValue();
+        person.leaveMonth = person.leaveDate;
+      }
       if (isPeopleBackendReady()) {
         await callPeopleBackend({
           action: "upsert",
@@ -2299,14 +2308,12 @@
       if (!person) return;
       if (action === "delete") {
         if (!confirm(`確定要刪除「${person.name || "這位人員"}」嗎？`)) return;
-        if (isPeopleBackendReady()) {
-          await callPeopleBackend({ action: "archive", id });
-          await syncPeopleData();
-          return;
-        }
         archivePersonId(id);
         savePeople(people.filter(item => item.id !== id));
         renderPeopleList();
+        if (isPeopleBackendReady()) {
+          callPeopleBackend({ action: "archive", id }).catch(() => {});
+        }
         return;
       }
       if (action === "promote") {
@@ -2320,23 +2327,24 @@
       }
       if (action === "leave") {
         person.category = "left";
-        if (!person.leaveMonth) person.leaveMonth = getCurrentMonthValue();
+        if (!person.leaveDate) {
+          person.leaveDate = getCurrentDateValue();
+          person.leaveMonth = person.leaveDate;
+        }
         peopleCategory = "left";
       }
       if (action === "uniformReturned") {
         person.uniformReturned = !person.uniformReturned;
       }
+      savePeople(people);
+      renderPeopleList();
       if (isPeopleBackendReady()) {
-        await callPeopleBackend({
+        callPeopleBackend({
           action: "update",
           id,
           patch: JSON.stringify(person),
-        });
-        await syncPeopleData();
-        return;
+        }).catch(() => {});
       }
-      savePeople(people);
-      renderPeopleList();
     }
 
     function parseSheetBoolean(value) {
@@ -2392,7 +2400,8 @@
         reportDate,
         promotionMonth: parseMonthValue(row[5]) || parseMonthValue(row[6]),
         uniformSize: String(row[11] || "").trim(),
-        leaveMonth: "",
+        leaveDate: category === "left" ? reportDate : "",
+        leaveMonth: category === "left" ? reportDate : "",
         expectedReturnDate: "",
         promotedPassed,
         innischool: parseSheetBoolean(row[9]),
@@ -2421,9 +2430,10 @@
       status.textContent = "同步人員表中...";
       try {
         const sourcePeople = await loadPeopleFromSourceSheet();
+        const archived = new Set(loadArchivedPeopleIds());
         if (isPeopleBackendReady()) {
           const payload = await callPeopleBackend({ action: "list" });
-          const backendPeople = (payload.people || []).filter(isValidPerson);
+          const backendPeople = (payload.people || []).filter(isValidPerson).filter(person => !archived.has(person.id));
           if (!backendPeople.length) {
             savePeople(sourcePeople);
             renderPeopleList();
@@ -2432,7 +2442,7 @@
           }
           const merged = new Map(sourcePeople.map(person => [person.id, person]));
           backendPeople.forEach(person => merged.set(person.id, person));
-          savePeople([...merged.values()]);
+          savePeople([...merged.values()].filter(person => !archived.has(person.id)));
           renderPeopleList();
           status.textContent = `已同步 ${loadPeople().length} 筆人員資料`;
           return;
