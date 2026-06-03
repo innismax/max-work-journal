@@ -1690,7 +1690,7 @@
     const storeJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1eXOOu23DjcDs7ux9okKxuYyMGclYljcbfSttwMXxugQ/gviz/tq?gid=1982357511";
     const ownJuneGvizUrl = "https://docs.google.com/spreadsheets/d/1Bn0Y71fYghy3-xmw8Zp84S6uF8JKFIH-FDhguUcaAbY/gviz/tq?gid=1917109526";
     const peopleGvizUrl = "https://docs.google.com/spreadsheets/d/1k79vEPkX1glnz5AQAROdLu_3e-FodeGRpSFMqw9JS_E/gviz/tq?gid=1321198903";
-    const peopleBackendUrl = "";
+    const peopleBackendUrl = "https://script.google.com/macros/s/AKfycbzAxri8XwHTUkFFotxLfYfu8svlH82PqrXTf7zGWZ8hOExTDD7UNNm6bvLwLTHc8R_3yg/exec";
     const todayForSchedule = new Date();
     let scheduleYear = todayForSchedule.getFullYear();
     let scheduleMonth = todayForSchedule.getMonth() + 1;
@@ -2411,7 +2411,7 @@
         const archived = new Set(loadArchivedPeopleIds());
         const imported = rows.slice(1)
           .map((row, index) => mapPeopleRow(row, index + 2))
-          .filter(person => person.store || person.name !== "未填姓名" || person.reportDate)
+          .filter(person => person.store || person.reportDate || (person.name && person.name !== "未填姓名"))
           .filter(person => !archived.has(person.id));
         const manualPeople = loadPeople().filter(person => person.source !== "peopleSheet");
         savePeople([...manualPeople, ...imported]);

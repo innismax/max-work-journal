@@ -52,7 +52,7 @@ function listPeople_() {
   sourcePeople.forEach(person => {
     sourceIds[person.id] = true;
     const saved = state[person.id] || {};
-    const mergedPerson = Object.assign({}, person, cleanState_(saved));
+    const mergedPerson = state[person.id] ? Object.assign({}, person, cleanState_(saved)) : person;
     if (!toBoolean_(mergedPerson.archived)) merged.push(mergedPerson);
   });
 
@@ -130,7 +130,7 @@ function readSourcePeople_() {
   const sheet = getSheetByGid_(ss, PEOPLE_SOURCE_GID);
   const values = sheet.getDataRange().getDisplayValues();
   return values.slice(1).map((row, index) => mapSourceRow_(row, index + 2))
-    .filter(person => person.store || person.name !== "未填姓名" || person.reportDate);
+    .filter(person => person.store || person.reportDate || (person.name && person.name !== "未填姓名"));
 }
 
 function getSheetByGid_(ss, gid) {
