@@ -1498,7 +1498,8 @@
         <div class="sync-status" id="peopleSyncStatus">人員資料先存在此瀏覽器</div>
         <div class="people-summary" id="peopleSummary"></div>
         <div class="people-tabs" aria-label="人員分類">
-          <button class="people-tab active" type="button" data-people-tab="new">新人</button>
+          <button class="people-tab active" type="button" data-people-tab="all">全部</button>
+          <button class="people-tab" type="button" data-people-tab="new">新人</button>
           <button class="people-tab" type="button" data-people-tab="promoted">已轉正</button>
           <button class="people-tab" type="button" data-people-tab="parttime">工讀生</button>
           <button class="people-tab" type="button" data-people-tab="left">離職人員</button>
@@ -1695,12 +1696,13 @@
     let scheduleYear = todayForSchedule.getFullYear();
     let scheduleMonth = todayForSchedule.getMonth() + 1;
     let openScheduleDay = todayForSchedule.getDate();
-    let peopleCategory = "new";
+    let peopleCategory = "all";
     let editingPersonId = null;
     let peopleCache = [];
     const peopleStorageKey = "max-work-journal-people";
     const archivedPeopleStorageKey = "max-work-journal-archived-people";
     const peopleCategoryLabels = {
+      all: "全部",
       new: "新人",
       promoted: "已轉正",
       parttime: "工讀生",
@@ -2052,6 +2054,7 @@
     function renderPeopleSummary() {
       const people = loadPeople();
       const counts = {
+        all: people.length,
         new: people.filter(person => person.category === "new").length,
         promoted: people.filter(person => person.category === "promoted").length,
         parttime: people.filter(person => person.category === "parttime").length,
@@ -2137,7 +2140,7 @@
 
     function renderPeopleList() {
       const list = document.getElementById("peopleList");
-      const people = loadPeople().filter(person => person.category === peopleCategory);
+      const people = loadPeople().filter(person => peopleCategory === "all" || person.category === peopleCategory);
       renderPeopleSummary();
       document.querySelectorAll(".people-tab").forEach(tab => {
         tab.classList.toggle("active", tab.dataset.peopleTab === peopleCategory);
@@ -2216,7 +2219,7 @@
     function openPersonModal(id) {
       const people = loadPeople();
       const person = people.find(item => item.id === id) || {
-        category: peopleCategory === "promoted" || peopleCategory === "left" ? "new" : peopleCategory,
+        category: peopleCategory === "promoted" || peopleCategory === "left" || peopleCategory === "all" ? "new" : peopleCategory,
       };
       editingPersonId = id || null;
       setText("personModalTitle", editingPersonId ? "編輯人員" : "新增人員");
