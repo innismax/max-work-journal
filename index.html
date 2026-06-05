@@ -1964,7 +1964,7 @@
         const tasks = [1, 2, 3, 4, 5].map(num => `
           <label class="journal-task-row ${num === 5 ? "wide" : ""}">
             <span class="journal-task-num">${num}</span>
-            <textarea class="journal-task" data-day="${day}" data-field="task${num}" placeholder="寫下第 ${num} 件事">${escapeHtml(record[`task${num}`] || "")}</textarea>
+            <textarea class="journal-task" data-day="${day}" data-field="task${num}">${escapeHtml(record[`task${num}`] || "")}</textarea>
           </label>
         `).join("");
         return `
@@ -1977,10 +1977,9 @@
               ${isToday ? '<span class="journal-day-tag">今天</span>' : ""}
             </div>
             <div class="journal-content">
-              <textarea class="journal-note" data-day="${day}" data-field="note" placeholder="假 / 備註 / 會議重點">${escapeHtml(record.note || "")}</textarea>
+              <textarea class="journal-note" data-day="${day}" data-field="note" placeholder="今日重點">${escapeHtml(record.note || "")}</textarea>
               <div class="journal-tasks">
                 ${tasks}
-                ${hasScheduleRecord(record) ? "" : '<div class="journal-empty-hint">可以直接在這一列寫，不需要先點開。</div>'}
               </div>
             </div>
           </section>
