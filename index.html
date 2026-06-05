@@ -658,26 +658,22 @@
     }
 
     .journal-day {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 16px;
+      padding: 14px 4px;
       border-bottom: 1px solid var(--line);
     }
 
-    .journal-day.open {
+    .journal-day.today {
       background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
     }
 
-    .journal-day-toggle {
+    .journal-day-side {
       display: grid;
-      grid-template-columns: 76px 1fr auto;
-      gap: 14px;
-      align-items: center;
-      width: 100%;
-      border: 0;
-      background: transparent;
-      color: var(--ink);
-      cursor: pointer;
-      padding: 16px 4px;
-      text-align: left;
-      font: inherit;
+      align-content: start;
+      gap: 6px;
+      padding-top: 4px;
     }
 
     .journal-date {
@@ -694,46 +690,53 @@
       font-weight: 850;
     }
 
-    .journal-preview {
-      overflow: hidden;
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 700;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .journal-chevron {
-      color: var(--muted);
-      font-size: 20px;
+    .journal-day-tag {
+      display: inline-flex;
+      width: fit-content;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: var(--blue);
+      font-size: 11px;
       font-weight: 900;
-      transition: transform .18s ease;
     }
 
-    .journal-day.open .journal-chevron {
-      transform: rotate(90deg);
-    }
-
-    .journal-body {
-      display: none;
-      padding: 0 4px 18px 90px;
-    }
-
-    .journal-day.open .journal-body {
+    .journal-content {
       display: grid;
-      gap: 10px;
+      grid-template-columns: minmax(180px, .78fr) minmax(0, 1.5fr);
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
+    }
+
+    .journal-tasks {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+      min-width: 0;
+    }
+
+    .journal-task-row.wide {
+      grid-column: 1 / -1;
+    }
+
+    .journal-empty-hint {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
     }
 
     .journal-note {
       width: 100%;
-      min-height: 46px;
+      min-height: 88px;
       border: 0;
       border-bottom: 1px solid var(--line);
       background: transparent;
       color: var(--ink);
       resize: vertical;
       font: 700 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang TC", "Noto Sans TC", Arial, sans-serif;
-      padding: 8px 0;
+      padding: 4px 0 8px;
     }
 
     .journal-task-row {
@@ -757,7 +760,7 @@
 
     .journal-task {
       width: 100%;
-      min-height: 40px;
+      min-height: 36px;
       border: 0;
       border-bottom: 1px solid var(--line);
       background: transparent;
@@ -1207,6 +1210,17 @@
         grid-template-columns: 1fr 1fr;
       }
 
+      .journal-day,
+      .journal-content {
+        grid-template-columns: 1fr;
+      }
+
+      .journal-day-side {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+      }
+
       .people-toolbar,
       .person-actions {
         align-items: stretch;
@@ -1251,7 +1265,8 @@
       .target-pair,
       .target-pair.three,
       .focus-status,
-      .today-grid {
+      .today-grid,
+      .journal-tasks {
         grid-template-columns: 1fr;
       }
 
@@ -1928,9 +1943,8 @@
       localStorage.setItem(`max-journal-schedule-${getScheduleKey(day)}`, JSON.stringify(record));
     }
 
-    function getSchedulePreview(record) {
-      const values = [record.note, record.task1, record.task2, record.task3, record.task4].filter(Boolean);
-      return values.length ? values.join(" / ") : "點開寫今天的安排";
+    function hasScheduleRecord(record) {
+      return [record.note, record.task1, record.task2, record.task3, record.task4, record.task5].some(Boolean);
     }
 
     function renderScheduleJournal() {
@@ -1941,47 +1955,41 @@
       const days = new Date(scheduleYear, scheduleMonth, 0).getDate();
       if (openScheduleDay > days) openScheduleDay = days;
       const weekNames = ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"];
+      const today = new Date();
       journal.innerHTML = Array.from({ length: days }, (_, index) => {
         const day = index + 1;
         const date = new Date(scheduleYear, scheduleMonth - 1, day);
         const record = getScheduleRecord(day);
-        const isOpen = day === openScheduleDay;
-        const tasks = [1, 2, 3, 4].map(num => `
-          <label class="journal-task-row">
+        const isToday = today.getFullYear() === scheduleYear && today.getMonth() + 1 === scheduleMonth && today.getDate() === day;
+        const tasks = [1, 2, 3, 4, 5].map(num => `
+          <label class="journal-task-row ${num === 5 ? "wide" : ""}">
             <span class="journal-task-num">${num}</span>
             <textarea class="journal-task" data-day="${day}" data-field="task${num}" placeholder="寫下第 ${num} 件事">${escapeHtml(record[`task${num}`] || "")}</textarea>
           </label>
         `).join("");
         return `
-          <section class="journal-day ${isOpen ? "open" : ""}">
-            <button class="journal-day-toggle" type="button" data-open-day="${day}">
-              <span>
-                <span class="journal-date">${day}</span>
-                <span class="journal-weekday">${weekNames[date.getDay()]}</span>
-              </span>
-              <span class="journal-preview">${escapeHtml(getSchedulePreview(record))}</span>
-              <span class="journal-chevron">›</span>
-            </button>
-            <div class="journal-body">
-              <textarea class="journal-note" data-day="${day}" data-field="note" placeholder="假 / 備註">${escapeHtml(record.note || "")}</textarea>
-              ${tasks}
+          <section class="journal-day ${isToday ? "today" : ""}">
+            <div class="journal-day-side">
+              <div>
+                <div class="journal-date">${day}</div>
+                <div class="journal-weekday">${weekNames[date.getDay()]}</div>
+              </div>
+              ${isToday ? '<span class="journal-day-tag">今天</span>' : ""}
+            </div>
+            <div class="journal-content">
+              <textarea class="journal-note" data-day="${day}" data-field="note" placeholder="假 / 備註 / 會議重點">${escapeHtml(record.note || "")}</textarea>
+              <div class="journal-tasks">
+                ${tasks}
+                ${hasScheduleRecord(record) ? "" : '<div class="journal-empty-hint">可以直接在這一列寫，不需要先點開。</div>'}
+              </div>
             </div>
           </section>
         `;
       }).join("");
 
-      journal.querySelectorAll("[data-open-day]").forEach(button => {
-        button.addEventListener("click", () => {
-          openScheduleDay = Number(button.dataset.openDay);
-          renderScheduleJournal();
-        });
-      });
       journal.querySelectorAll("[data-field]").forEach(input => {
         input.addEventListener("input", () => {
           saveScheduleRecord(Number(input.dataset.day), input.dataset.field, input.value);
-          const row = input.closest(".journal-day");
-          const preview = row.querySelector(".journal-preview");
-          preview.textContent = getSchedulePreview(getScheduleRecord(Number(input.dataset.day)));
         });
       });
     }
